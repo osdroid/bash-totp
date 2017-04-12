@@ -11,6 +11,9 @@ help() {
   exit -1
 }
 
+# Before we get the token, redirect stdout to stderr.
+exec 3>&1 1>&2
+
 TOTP_SECRET=$1
 TOTP_SERVER=${2:-Google}
 TOTP_INTERVAL=${3:-30}
@@ -42,15 +45,17 @@ gen_token() {
   local secret=$1 server=$2 period=$3
   case "${server}" in
     google | github | gitlab | bitbucket)
-      local key=$( echo "${secret}" | base32 -d | hexdump -ve '/1 "%02X"' )
+      local key=$(echo "${secret}" | base32 -d | hexdump -ve '/1 "%02X"')
+      [[ -z "${key}" ]] && exit 1
       # The digest is a 160-bit hexadecimal number string.
-      local digest=$( gen_digest "${key}" "${period}" )
+      local digest=$(gen_digest "${key}" "${period}")
+      [[ "${#digest}" -ne 40 ]] && exit 2
       # Read the last 4 bits and convert it into an unsigned integer.
       local offset=$(( $(printf %d "0x${digest:39}") * 2 ))
       # Read a 32-bit positive integer and take at most six rightmost digits.
       local token=$(( ("0x${digest:offset:8}" & 0x7FFFFFFF) % 1000000 ))
       # Pad the token number with leading zeros if needed.
-      printf '%06d\n' "${token}"
+      printf '%06d\n' "${token}" >&3
       ;;
     *)
       echo "Your server is not supported: ${server}"
