@@ -3,7 +3,7 @@
 help() {
   echo "Time-based One-time Password Generator"
   echo
-  echo "USAGE: $(basename $0) <key> [server] [interval]"
+  echo "USAGE: $(printf %q "$(basename -- "$0")") <key> [server] [interval]"
   echo
   echo "The default update interval is 30 seconds."
   echo
@@ -11,7 +11,7 @@ help() {
   exit -1
 }
 
-# Before we get the token, redirect stdout to stderr.
+# Before we get the token, direct fd3 to stdout and redirect stdout to stderr.
 exec 3>&1 1>&2
 
 TOTP_SECRET=$1
