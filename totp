@@ -11,7 +11,7 @@ help() {
   exit -1
 }
 
-# Before we get the token, direct fd3 to stdout and redirect stdout to stderr.
+# Before we get the token, redirect stdout to stderr.
 exec 3>&1 1>&2
 
 TOTP_SECRET=$1
@@ -53,7 +53,7 @@ gen_token() {
       # Read the last 4 bits and convert it into an unsigned integer.
       local offset=$(( $(printf %d "0x${digest:39}") * 2 ))
       # Read a 32-bit positive integer and take at most six rightmost digits.
-      local token=$(( ("0x${digest:offset:8}" & 0x7FFFFFFF) % 1000000 ))
+      local token=$(( (0x${digest:offset:8} & 0x7FFFFFFF) % 1000000 ))
       # Pad the token number with leading zeros if needed.
       printf '%06d\n' "${token}" >&3
       ;;
