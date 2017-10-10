@@ -24,8 +24,8 @@ fi
 TOTP_SECRET=$(echo "${TOTP_SECRET// /}" | tr a-z A-Z)
 TOTP_SERVER=$(echo "${TOTP_SERVER}" | tr A-Z a-z)
 
-if [[ ! "${TOTP_INTERVAL}" =~ ^[0-9]+$ ]]; then
-  echo "The update interval must be a non-negative integer: ${TOTP_INTERVAL}"
+if [[ ! "${TOTP_INTERVAL}" =~ ^[1-9][0-9]*$ ]]; then
+  echo "The update interval must be a positive integer: ${TOTP_INTERVAL}"
   echo
   help
 fi
