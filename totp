@@ -1,67 +1,44 @@
 #!/usr/bin/env bash
 
-help() {
-  echo "Time-based One-time Password Generator"
-  echo
-  echo "USAGE: $(printf %q "$(basename -- "$0")") <key> [server] [interval]"
-  echo
-  echo "The default update interval is 30 seconds."
-  echo
-  echo "Supported servers: Google, GitHub, GitLab, Bitbucket"
-  exit -1
-}
+declare -i TOTP_INTERVAL
+declare -i TOTP_PERIOD
 
 # Before we get the token, redirect stdout to stderr.
 exec 3>&1 1>&2
 
-TOTP_SECRET=$1
-TOTP_SERVER=${2:-Google}
-TOTP_INTERVAL=${3:-30}
+TOTP_SECRET=${1?The secret was not supplied}
+TOTP_INTERVAL=${2:-30}
+TOTP_SECRET=${TOTP_SECRET^^}
+TOTP_SECRET=$(tr -cd A-Z2-7= <<< "$TOTP_SECRET")
 
-if [[ -z "${TOTP_SECRET}" ]]; then
-  help
+if [ "$TOTP_INTERVAL" -le 0 ]; then
+    echo "The update interval must be a positive integer: $2"
+    exit 1
 fi
-TOTP_SECRET=$(echo "${TOTP_SECRET// /}" | tr a-z A-Z)
-TOTP_SERVER=$(echo "${TOTP_SERVER}" | tr A-Z a-z)
-
-if [[ ! "${TOTP_INTERVAL}" =~ ^0*[1-9][0-9]*$ ]]; then
-  echo "The update interval must be a positive integer: ${TOTP_INTERVAL}"
-  echo
-  help
-fi
-# Remove leading zeros.
-TOTP_INTERVAL=$(printf %d "${TOTP_INTERVAL}")
-
-TOTP_PERIOD=$(( $(date +%s) / TOTP_INTERVAL ))
+CURR_TIME=$(date +%s)
+TOTP_PERIOD=$(( CURR_TIME / TOTP_INTERVAL ))
+TOTP_REMAINING=$(( (TOTP_PERIOD + 1) * TOTP_INTERVAL - CURR_TIME ))
 
 gen_digest() {
-  local key=$1 period=$2
-  printf "$(printf %016X "${period}" | sed 's/../\\x\0/g')" |
-    openssl dgst -sha1 -mac HMAC -macopt "hexkey:${key}" |
-      cut -d\  -f2
+    local key=$1 period=$2
+    printf "$(printf %016X "${period}" | sed 's/../\\x&/g')" |
+	openssl dgst -sha1 -mac HMAC -macopt "hexkey:${key}" |
+	cut -d\  -f2
 }
 
 gen_token() {
-  local secret=$1 server=$2 period=$3
-  case "${server}" in
-    google | github | gitlab | bitbucket)
-      local key=$(echo "${secret}" | base32 -d | hexdump -ve '/1 "%02X"')
-      [[ -z "${key}" ]] && exit 1
-      # The digest is a 160-bit hexadecimal number string.
-      local digest=$(gen_digest "${key}" "${period}")
-      [[ "${#digest}" -ne 40 ]] && exit 2
-      # Read the last 4 bits and convert it into an unsigned integer.
-      local offset=$(( $(printf %d "0x${digest:39}") * 2 ))
-      # Read a 32-bit positive integer and take at most six rightmost digits.
-      local token=$(( (0x${digest:offset:8} & 0x7FFFFFFF) % 1000000 ))
-      # Pad the token number with leading zeros if needed.
-      printf '%06d\n' "${token}" >&3
-      ;;
-    *)
-      echo "Your server is not supported: ${server}"
-      echo
-      help
-  esac
+    local secret=$1 period=$2
+    local key=$(echo "$secret" | base32 -d | hexdump -ve '/1 "%02X"')
+    [ -z "$key" ] && exit 1
+    # The digest is a 160-bit hexadecimal number string.
+    local digest=$(gen_digest "${key}" "${period}")
+    [ "${#digest}" -ne 40 ] && exit 2
+    # Read the last 4 bits and convert it into an unsigned integer.
+    local offset=$(( $(printf %d "0x${digest:39}") * 2 ))
+    # Read a 32-bit positive integer and take at most six rightmost digits.
+    local token=$(( (0x${digest:offset:8} & 0x7FFFFFFF) % 1000000 ))
+    # Pad the token number with leading zeros if needed.
+    printf '%06d\n' "${token}" >&3
 }
-
-gen_token "${TOTP_SECRET}" "${TOTP_SERVER}" "${TOTP_PERIOD}"
+echo ${TOTP_REMAINING}s...
+gen_token "${TOTP_SECRET}" "${TOTP_PERIOD}"
