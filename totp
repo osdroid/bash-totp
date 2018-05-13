@@ -1,20 +1,52 @@
 #!/usr/bin/env bash
 
+ENC_ALGORITHM='-aes-256-cbc -a'
 declare -i TOTP_INTERVAL
 declare -i TOTP_PERIOD
+declare -i TOTP_DIGITS
 
-# Before we get the token, redirect stdout to stderr.
-exec 3>&1 1>&2
+if [ -z "$TOTP_SECRETS_PATH" -o ! -d "$TOTP_SECRETS_PATH" ]; then
+    tput setaf 3; tput bold
+    cat <<"EOF" 
+---------------------------------------------------
+| The secrets path was not found, set it with:    |
+| export TOTP_SECRETS_PATH=$HOME/path/to/secrets  |
+| and make sure the folder exists                 |
+---------------------------------------------------
+EOF
+    tput sgr0
+    exit 1
+fi
 
-TOTP_SECRET=${1?The secret was not supplied}
-TOTP_INTERVAL=${2:-30}
+showerr() {
+    local msg=$1 exit=${2:-1}
+    echo $'\e[1;31mERROR - '"$msg"$'\e[m'
+    exit $exit
+}
+
+for file in "$TOTP_SECRETS_PATH"/*; do
+    file=${file##*/}
+    [ "$file" != '*' ] && history -s "$file"
+done
+read -ep 'Service: ' service
+file="$TOTP_SECRETS_PATH/$service"
+[ ! -f "$file" ] && showerr 'File not found'
+
+secret_data=($(openssl enc $ENC_ALGORITHM -d -in "$file"))
+if [ "$?" -ne 0 -o "${#secret_data[@]}" -lt 2 -o "${secret_data[0]}" != 'otpauth' ]; then
+    showerr 'Invalid totp file, the password might have been incorrect' 2
+fi
+
+TOTP_SECRET=${secret_data[1]}
+TOTP_INTERVAL=${secret_data[2]:-30}
+TOTP_DIGITS=${secret_data[3]:-6}
+
 TOTP_SECRET=${TOTP_SECRET^^}
 TOTP_SECRET=$(tr -cd A-Z2-7= <<< "$TOTP_SECRET")
 
-if [ "$TOTP_INTERVAL" -le 0 ]; then
-    echo "The update interval must be a positive integer: $2"
-    exit 1
-fi
+[ -z "$TOTP_SECRET" ] && showerr 'The secret is empty'
+[ "$TOTP_INTERVAL" -le 0 ] && showerr 'The update interval must be a positive integer: '"${secret_data[2]}"
+
 CURR_TIME=$(date +%s)
 TOTP_PERIOD=$(( CURR_TIME / TOTP_INTERVAL ))
 TOTP_REMAINING=$(( (TOTP_PERIOD + 1) * TOTP_INTERVAL - CURR_TIME ))
@@ -38,7 +70,7 @@ gen_token() {
     # Read a 32-bit positive integer and take at most six rightmost digits.
     local token=$(( (0x${digest:offset:8} & 0x7FFFFFFF) % 1000000 ))
     # Pad the token number with leading zeros if needed.
-    printf '%06d\n' "${token}" >&3
+    printf '%06d\n' "${token}"
 }
-echo ${TOTP_REMAINING}s...
-gen_token "${TOTP_SECRET}" "${TOTP_PERIOD}"
+token=$(gen_token "$TOTP_SECRET" "$TOTP_PERIOD")
+echo -e "  ${TOTP_REMAINING}s...\e[1;34m $token \e[m"
