@@ -17,8 +17,10 @@ to the history, so that you can use the arrows to navigate through the options.
 ## How to set up
 1) Decide where to store your totp secrets, maybe $HOME/.totp-secrets and mkdir that folder  
 2) Then "export TOTP_SECRETS_PATH=/path/to/totp/secrets" (pro tip) add it to .bashrc  
-3) Now add some "secrets"  
-openssl enc -aes-256-cbc -a <<< 'otpauth secretinbase32eitherlowerORUPPER 30 6' > /path/to/totp/secrets/service1
+3) Now to add some secrets, run ./totp name-of-service  
 
-## Usage: ./totp
+## Usage: ./totp [filename]
+If no filename is provided, it will temporarily populate the history with the list of
+available files, and prompt you to enter it (you can use the arrow keys). By specifying
+a non-existent file, it will guide you through the creation of it.
 

@@ -24,13 +24,27 @@ showerr() {
     exit $exit
 }
 
-for file in "$TOTP_SECRETS_PATH"/*; do
-    file=${file##*/}
-    [ "$file" != '*' ] && history -s "$file"
-done
-read -ep 'Service: ' service
+if [ "$#" -eq 1 -a ! -z "$1" ]; then
+    service="$1"
+else
+    for file in "$TOTP_SECRETS_PATH"/*; do
+	file=${file##*/}
+	[ "$file" != '*' ] && history -s "$file"
+    done
+    read -ep 'Service: ' service
+fi
 file="$TOTP_SECRETS_PATH/$service"
-[ ! -f "$file" ] && showerr 'File not found'
+if [ ! -e "$file" ]; then
+    read -ep 'Service not found, create it? [y/N] ' create
+    [ "$create" = y -o "$create" = Y ] || exit 0
+    read -ep 'Secret: ' secret
+    read -ep 'Interval: ' -i '30' interval
+    read -ep 'Digits: ' -i '6' digits
+    echo "otpauth $secret $interval $digits" | openssl enc $ENC_ALGORITHM > "$file"
+    [ "$?" -ne 0 ] && exit
+    unset secret
+fi
+[ ! -f "$file" ] && showerr 'Not a file'
 
 secret_data=($(openssl enc $ENC_ALGORITHM -d -in "$file"))
 if [ "$?" -ne 0 -o "${#secret_data[@]}" -lt 2 -o "${secret_data[0]}" != 'otpauth' ]; then
@@ -74,3 +88,5 @@ gen_token() {
 }
 token=$(gen_token "$TOTP_SECRET" "$TOTP_PERIOD")
 echo -e "  ${TOTP_REMAINING}s...\e[1;34m $token \e[m"
+unset secret_data
+unset TOTP_SECRET
