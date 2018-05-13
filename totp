@@ -81,10 +81,10 @@ gen_token() {
     [ "${#digest}" -ne 40 ] && exit 2
     # Read the last 4 bits and convert it into an unsigned integer.
     local offset=$(( $(printf %d "0x${digest:39}") * 2 ))
-    # Read a 32-bit positive integer and take at most six rightmost digits.
-    local token=$(( (0x${digest:offset:8} & 0x7FFFFFFF) % 1000000 ))
+    # Read a 32-bit positive integer and take at most N rightmost digits.
+    local token=$(( (0x${digest:offset:8} & 0x7FFFFFFF) % (10 ** TOTP_DIGITS) ))
     # Pad the token number with leading zeros if needed.
-    printf '%06d\n' "${token}"
+    printf "%0${TOTP_DIGITS}d\n" "${token}"
 }
 token=$(gen_token "$TOTP_SECRET" "$TOTP_PERIOD")
 echo -e "  ${TOTP_REMAINING}s...\e[1;34m $token \e[m"
