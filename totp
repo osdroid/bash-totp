@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-ENC_ALGORITHM='-aes-256-cbc -a'
+ENC_ALGORITHM='-aes-256-cbc -a -md sha256'
 declare -i TOTP_INTERVAL
 declare -i TOTP_PERIOD
 declare -i TOTP_DIGITS
